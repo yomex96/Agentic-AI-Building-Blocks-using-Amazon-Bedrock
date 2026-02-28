@@ -63,3 +63,139 @@ if __name__ == "__main__":
     else:
         print("❌ Connection failed!")
         print(f"Error: {response}")
+---
+
+def execute_curl_command(url):
+    """
+    Execute a curl command to fetch data from an API.
+    This is how our agent "acts" in the real world - making HTTP requests.
+    
+    Args:
+        url (str): The URL to fetch data from
+    
+    Returns:
+        tuple: (success: bool, response: str) - success status and API response or error message
+    """
+    try:
+        # Use curl command to make HTTP request
+        # curl is a command-line tool for making HTTP requests
+        result = subprocess.run(
+            ['curl', '-s', url],  # -s flag makes curl silent (no progress info)
+            capture_output=True,   # Capture the output so we can process it
+            text=True,            # Return output as text (not bytes)
+            timeout=30            # Give up after 30 seconds
+        )
+        
+        # Check if the command was successful
+        if result.returncode == 0:
+            return True, result.stdout
+        else:
+            return False, f"Curl command failed: {result.stderr}"
+            
+    except subprocess.TimeoutExpired:
+        return False, "Request timed out after 30 seconds"
+    except Exception as e:
+        return False, f"Error executing curl: {str(e)}"
+
+def generate_weather_api_calls(location):
+    """
+    Use Claude to intelligently generate National Weather Service API calls for a given location.
+    This is where the "agentic" magic happens - AI planning the API calls.
+    
+    Args:
+        location (str): The location provided by the user
+    
+    Returns:
+        tuple: (success: bool, api_calls: list) - success status and list of API URLs or error message
+    """
+    # Create a detailed prompt that teaches Claude how to generate NWS API calls
+    prompt = f"""
+You are an expert at working with the National Weather Service (NWS) API.
+
+Your task: Generate the NWS API URL to get weather forecast data for "{location}".
+
+Instructions:
+1. First, determine the approximate latitude and longitude coordinates for this location
+2. Generate the NWS Points API URL: https://api.weather.gov/points/{{lat}},{{lon}}
+
+For the coordinates, use your knowledge to estimate:
+- Major cities: Use well-known coordinates
+- ZIP codes: Estimate based on the area
+- States: Use approximate center coordinates
+- In case a location description is provided instead of a location name, please use the most likely city and state name as the location for the coordinates
+
+Example for Seattle:
+https://api.weather.gov/points/47.6062,-122.3321
+
+Example for largest city in USA:
+Based on your knowledge, you will establish location is New York City
+https://api.weather.gov/points/40.7128,-74.0060
+
+Now generate the API call (Points API) for the established location. 
+Return ONLY the complete Points API URL, nothing else.
+Format: https://api.weather.gov/points/LAT,LON
+"""
+    
+    print(f"🧠 AI is analyzing '{location}' and generating weather API calls...")
+    success, response = call_claude_sonnet(prompt)
+    
+    if success:
+        # Clean up the response - sometimes Claude adds extra text
+        api_url = response.strip()
+        # Make sure we got a valid URL
+        if api_url.startswith('https://api.weather.gov/points/'):
+            return True, [api_url]  # Return as list for consistency
+        else:
+            return False, f"AI generated invalid URL: {api_url}"
+    else:
+        return False, response
+
+def get_forecast_url_from_points_response(points_json):
+    """
+    Extract the forecast URL from the NWS Points API response.
+    
+    Args:
+        points_json (str): JSON response from the Points API
+    
+    Returns:
+        tuple: (success: bool, forecast_url: str) - success status and forecast URL or error message
+    """
+    try:
+        data = json.loads(points_json)
+        forecast_url = data['properties']['forecast']
+        return True, forecast_url
+    except (json.JSONDecodeError, KeyError) as e:
+        return False, f"Error parsing Points API response: {str(e)}"
+
+def process_weather_response(raw_json, location):
+    """
+    Use Claude to convert raw NWS API JSON into a human-readable weather summary.
+    This is where AI processes complex data into useful information.
+    
+    Args:
+        raw_json (str): Raw JSON response from NWS API
+        location (str): Original location for context
+    
+    Returns:
+        tuple: (success: bool, summary: str) - success status and processed summary or error message
+    """
+    prompt = f"""
+You are a weather information specialist. I have raw National Weather Service forecast data for "{location}" that needs to be converted into a clear, helpful summary for a general audience.
+
+Raw NWS API Response:
+{raw_json}
+
+Please create a weather summary that includes:
+1. A brief introduction with the location
+2. Current conditions and today's forecast
+3. The next 2-3 days outlook with key details (temperature, precipitation, wind)
+4. Any notable weather patterns or alerts
+5. Format the response to be easy to read and understand
+
+Make it informative and practical for someone planning their activities. Focus on being helpful and clear.
+"""
+    
+    print(f"📊 AI is processing weather data and creating summary...")
+    success, response = call_claude_sonnet(prompt)
+    
+    return success, response
