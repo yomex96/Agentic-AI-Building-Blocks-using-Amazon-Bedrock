@@ -199,3 +199,92 @@ Make it informative and practical for someone planning their activities. Focus o
     success, response = call_claude_sonnet(prompt)
     
     return success, response
+
+---
+
+def run_weather_agent():
+    """
+    Main function that orchestrates our AI agent.
+    This demonstrates the complete agentic workflow.
+    """
+    print("🌤️ Welcome to the Weather AI Agent!")
+    print("This agent uses Claude 4.5 Sonnet to help you get weather forecasts.")
+    print("=" * 60)
+    
+    while True:
+        # Get user input
+        location = input("\n🔍 Enter a location name or description (or 'quit' to exit): ").strip()
+        
+        if location.lower() in ['quit', 'exit', 'q']:
+            print("👋 Thanks for using the Weather Agent!")
+            break
+            
+        if not location:
+            print("❌ Please enter a location name or description.")
+            continue
+            
+        print(f"\n🚀 Starting weather analysis for '{location}'...")
+        print("-" * 40)
+        
+        # Step 1: AI generates the Points API URL
+        print("Step 1: 🧠 AI Planning Phase")
+        success, api_calls = generate_weather_api_calls(location)
+        
+        if not success:
+            print(f"❌ Failed to generate API calls: {api_calls}")
+            continue
+            
+        points_url = api_calls[0]
+        print(f"✅ Generated Points API URL: {points_url}")
+        
+        # Step 2: Execute the Points API call
+        print("\nStep 2: 🔗 Points API Execution")
+        print("Fetching location data from National Weather Service...")
+        success, points_response = execute_curl_command(points_url)
+        
+        if not success:
+            print(f"❌ Failed to fetch points data: {points_response}")
+            continue
+            
+        print(f"✅ Received points data")
+        
+        # Step 3: Extract forecast URL from Points response
+        print("\nStep 3: 📍 Extracting Forecast URL")
+        success, forecast_url = get_forecast_url_from_points_response(points_response)
+        
+        if not success:
+            print(f"❌ Failed to extract forecast URL: {forecast_url}")
+            continue
+            
+        print(f"✅ Forecast URL: {forecast_url[:60]}...")
+        
+        # Step 4: Execute the Forecast API call
+        print("\nStep 4: 🌦️ Forecast API Execution")
+        print("Fetching weather forecast data...")
+        success, forecast_response = execute_curl_command(forecast_url)
+        
+        if not success:
+            print(f"❌ Failed to fetch forecast data: {forecast_response}")
+            continue
+            
+        print(f"✅ Received {len(forecast_response)} characters of forecast data")
+        
+        # Step 5: AI processes the response
+        print("\nStep 5: 📊 AI Analysis Phase")
+        success, summary = process_weather_response(forecast_response, location)
+        
+        if not success:
+            print(f"❌ Failed to process data: {summary}")
+            continue
+            
+        # Step 6: Display results
+        print("\nStep 6: 💬 Weather Forecast")
+        print("=" * 60)
+        print(summary)
+        print("=" * 60)
+        
+        print(f"\n✅ Weather analysis complete for '{location}'!")
+
+# Run the agent when the script is executed
+if __name__ == "__main__":
+    run_weather_agent()
